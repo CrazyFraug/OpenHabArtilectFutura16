@@ -9,11 +9,10 @@ Group Weather       "Weather"       <sun>
 Group Status
 Group Shutters
 
-
 /* active groups */
-Group:Switch:OR(ON, OFF)        Lumieres      "All Lights [(%d)]"
-Group:Switch:OR(ON, OFF)        Radiateurs     "No. of Active Heatings [(%d)]"     <heating>
-Group:Number:AVG                Temperature "Avg. Room Temperature [%.1f °C]"   <temperature>   (Status)
+Group:Switch:OR(ON, OFF)        Lumieres     "Toutes les lumières [(%d)]"
+Group:Switch:OR(ON, OFF)        Radiateurs   "Tous les radiateurs [(%d)]"     <heating>
+Group:Number:AVG                Temperature  "Temperature moyenne [%.1f °C]"   <temperature>   (Status)
 Group:Contact:OR(OPEN, CLOSED)  Fenetres     "Open windows [(%d)]"               <contact>
 
 /* Lights */
@@ -36,39 +35,35 @@ Switch Lumiere_Jardin_Portail    "Portail"       (gJardin, Lumieres)
 Switch Lumiere_Jardin_Chemin    "Chemin"       (gJardin, Lumieres)
 Switch Lumiere_Jardin_Porche   "Porche"       (gJardin, Lumieres)
 
-
+/* that item is just a number that is incremented during a Hola with lights; see home.rules */
+Number Lumiere_Hola_Select
+Switch Lumiere_Hola_Switch   "Hola lumineuse"
 
 /* Heating */
 
-Switch Radiateur_Living  "Radiateur"      <heating>   (gLiving, Radiateurs) {mqtt=">[local_mqtt:/domotique/living/oh/radiateur/switch:command:*:default],<[local_mqtt:/domotique/living/+/radiateur/etat:state:default]"}
+Switch Radiateur_Living         "Radiateur"      <heating>   (gLiving, Radiateurs) {mqtt=">[local_mqtt:/domotique/living/oh/radiateur/switch:command:*:default],<[local_mqtt:/domotique/living/+/radiateur/etat:state:default]"}
 Switch Radiateur_Chambre_Parent "Radiateur"      <heating>   (gChambreParent, Radiateurs) {mqtt=">[local_mqtt:/domotique/parent/oh/radiateur/switch:command:*:default],<[local_mqtt:/domotique/parent/+/radiateur/etat:state:default]"}
 Switch Radiateur_Chambre_Enfant "Radiateur"      <heating>   (gChambreEnfant, Radiateurs)  {mqtt=">[local_mqtt:/domotique/enfant/oh/radiateur/switch:command:*:default],<[local_mqtt:/domotique/enfant/+/radiateur/etat:state:default]"}
 
 
 /* Rollershutters */
 
-Rollershutter Shutter_GF_Toilet         "Toilet"        (GF_Toilet, Shutters)
-Rollershutter Shutter_GF_Kitchen        "Kitchen"       (GF_Kitchen, Shutters)
-Rollershutter Shutter_GF_Living         "Livingroom"    (GF_Living, Shutters)
-
-Rollershutter Shutter_FF_Bed            "Bedroom"       (FF_Bed, Shutters)
-Rollershutter Shutter_FF_Bath           "Bath"          (FF_Bath, Shutters)
-Rollershutter Shutter_FF_Office_Window  "Office Window" (FF_Office, Shutters)
-Rollershutter Shutter_FF_Office_Door    "Office Door"   (FF_Office, Shutters)
+Rollershutter Shutter_Living_Cote      "Volet cote"      (gLiving, Shutters) {mqtt=">[local_mqtt:/domotique/living/oh/shutter_c/switch:command:*:default],<[local_mqtt:/domotique/living/+/shutter_c/etat:state:default]"}
+Rollershutter Shutter_Living_Rearg     "Volet gauche"    (gLiving, Shutters) {mqtt=">[local_mqtt:/domotique/living/oh/shutter_rg/switch:command:*:default],<[local_mqtt:/domotique/living/+/shutter_rg/etat:state:default]"}
+Rollershutter Shutter_Living_Reard     "Volet droite"    (gLiving, Shutters) {mqtt=">[local_mqtt:/domotique/living/oh/shutter_rd/switch:command:*:default],<[local_mqtt:/domotique/living/+/shutter_rd/etat:state:default]"}
+Rollershutter Shutter_Chambre_Parentg  "Volet gauche"    (gChambreParent, Shutters) {mqtt=">[local_mqtt:/domotique/parent/oh/shutterg/switch:command:*:default],<[local_mqtt:/domotique/parent/+/shutterg/etat:state:default]"}
+Rollershutter Shutter_Chambre_Parentd  "Volet droite"    (gChambreParent, Shutters) {mqtt=">[local_mqtt:/domotique/parent/oh/shutterd/switch:command:*:default],<[local_mqtt:/domotique/parent/+/shutterd/etat:state:default]"}
+Rollershutter Shutter_Chambre_Enfantg  "Volet gauche"    (gChambreEnfant, Shutters)  {mqtt=">[local_mqtt:/domotique/enfant/oh/shutterg/switch:command:*:default],<[local_mqtt:/domotique/enfant/+/shutterg/etat:state:default]"}
+Rollershutter Shutter_Chambre_Enfantd  "Volet droite"    (gChambreEnfant, Shutters)  {mqtt=">[local_mqtt:/domotique/enfant/oh/shutterd/switch:command:*:default],<[local_mqtt:/domotique/enfant/+/shutterd/etat:state:default]"}
 
 Switch Shutter_all
 
 
 /* Indoor Temperatures */
 
-Number Temperature_GF_Corridor  "Temperature [%.1f °C]" <temperature>   (Temperature, GF_Corridor)
-Number Temperature_GF_Toilet    "Temperature [%.1f °C]" <temperature>   (Temperature, GF_Toilet)
-Number Temperature_GF_Living    "Temperature [%.1f °C]" <temperature>   (Temperature, GF_Living)
-Number Temperature_GF_Kitchen   "Temperature [%.1f °C]" <temperature>   (Temperature, GF_Kitchen)
-Number Temperature_FF_Bath      "Temperature [%.1f °C]" <temperature>   (Temperature, FF_Bath)
-Number Temperature_FF_Office    "Temperature [%.1f °C]" <temperature>   (Temperature, FF_Office)
-Number Temperature_FF_Child     "Temperature [%.1f °C]" <temperature>   (Temperature, FF_Child)
-Number Temperature_FF_Bed       "Temperature [%.1f °C]" <temperature>   (Temperature, FF_Bed)
+Number Temperature_Living            "Temperature [%.1f °C]" <temperature>   (Temperature, gLiving)
+Number Temperature_Chambre_Parent    "Temperature [%.1f °C]" <temperature>   (Temperature, gChambreParent)
+Number Temperature_Chambre_Enfant    "Temperature [%.1f °C]" <temperature>   (Temperature, gChambreEnfant)
 
 
 /* Windows */
@@ -86,10 +81,12 @@ Contact Window_FF_Office_Door   "Balcony Door [MAP(en.map):%s]"     (FF_Office, 
 Contact Garage_Door             "Garage Door [MAP(en.map):%s]"      (Garden, Windows)
 
 Group Weather_Chart
-Number Weather_Temperature      "Outside Temperature [%.1f °C]" <temperature> (Weather, Weather_Chart) { channel="yahooweather:weather:berlin:temperature" }
+Number Weather_Temperature      "Outside Temperature [%.1f °C]" <temperature> (Weather, Weather_Chart) // { channel="yahooweather:weather:berlin:temperature" } 
+//{ http="<[http://weather.yahooapis.com/forecastrss?w=638242&u=c:60000:XSLT(yahoo_weather_temperature.xsl)]" }
+//{ channel="yahooweather:weather:berlin:temperature" }
 Number Weather_Temp_Max         "Todays Maximum [%.1f °C]"      <temperature> (Weather, Weather_Chart)
 Number Weather_Temp_Min         "Todays Minimum [%.1f °C]"      <temperature> (Weather, Weather_Chart)
-Number Weather_Chart_Period     "Chart Period"
+Number Weather_Chart_Period     "Chart Period"                <clock>
 DateTime Weather_LastUpdate     "Last Update [%1$ta %1$tR]"     <clock>
 Number Sun_Elevation            "Sun Elevation"                 <sun>       { channel = "astro:sun:home:position#elevation" }
 Number Sun_Azimuth              "Sun Azimuth"                   <sun>       { channel = "astro:sun:home:position#azimuth" }
@@ -111,9 +108,9 @@ Dimmer DemoBlinds               "Blinds [%d %%]"        <rollershutter>
 Number Scene_General            "Scene"                 <sofa>
 Number Radio_Station            "Radio"                 <network>
 Dimmer Volume                   "Volume [%.1f %%]"
-Number Temperature_Setpoint     "Temperature TEST [%.1f °C]" <temperature>  {mqtt="<[local_mqtt:py/weathertest/mytemp:state:default]"}
+Number Temperature_Setpoint     "Temperature TEST [%.1f °C]" <temperature>  {mqtt="<[local_mqtt:/domotique/outside/+/mytemp:state:default]"}
 Location DemoLocation           "Brandenburg Gate Berlin"
 Number Wifi_Level               "Wifi Level [%d/4]"     <signal>        (FF_Office)
-Number psu_temp "My Temp [%.1f %%]" <temperature> {mqtt="<[local_mqtt:py/weathertest/temperaturetest:state:default]"}
+
 
 

@@ -45,6 +45,7 @@ def logp (msg, gravity='trace'):
 # log file must not grow big
 # I need to overwrite it often
 def reOpenLogfile(logfileName):
+	"re open logfile, I do it because it must not grow big"
 	global logStartTime, logfile
 	#
 	if logfileName != '' :
@@ -108,15 +109,15 @@ if __name__ == "__main__":
 # if logfile is old, we remove it and overwrite it
 #   because it must not grow big !
 def checkLogfileSize(logfile):
+	"if logfile is old, we remove it and overwrite it because it must not grow big !"
 	global logStartTime
 	if (time.time() - logStartTime) > 600:
-		#print('reOpenLogfile of name:' + logfile.name)
 		reOpenLogfile(logfile.name)
 
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, rc):
-	print("Connected with result code "+str(rc))
+	print("Connected to mosquitto with result code "+str(rc))
 	# Subscribing in on_connect() means that if we lose the connection and
 	# reconnect then subscriptions will be renewed.
 	mqttc.subscribe(myTopic1+ topFromOH +'#')

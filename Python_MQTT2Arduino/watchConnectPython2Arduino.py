@@ -6,37 +6,30 @@ import paho.mqtt.publish as publish
 import serial
 import time
 import sys, getopt
+import ast
+import os, glob
 
-# IP address of MQTT broker
+
+fileNameListSketch = 'listSketch.txt'
+repTmp='/media/ramdisk/openhab/logPython'
+
 hostMQTT='localhost'
-# example of free MQTT broker:  'iot.eclipse.org'
+devSearchString='/dev/tty[UA]*'
+sleepBetweenLoop=2
 
-clientId='myNameOfClient'
-
-logDir='/media/ramdisk/openhab/logPython/'
-logfile=watchPyMaster.log
-logStartTime=0.
-
-myTopic1='/domotique/garage/topictest/'
-myTopic2='/domotique/garage/topictest2/'
-
-devSerial='/dev/ttyUSB1'   # serial port the arduino is connected to
-cmdSendValue='SendValue'
-
-
-# serial msg to arduino begin  with  prefAT / prefDO and end with endOfLine
-prefAT='AT+'
-prefDO='DO+'
-endOfLine='\n'
-# arduino responds with those 2 kind of messages
-msg2py='2py'
-msg2mqtt='2mq'
-
-sleepBetweenLoop=1    # sleep time (eg: 1s) to slow down loop
-namePy='pym'
-topFromPy= namePy + '/'
-topFromOH='oh/'
+myTopicWatch='/domotique/watch/'
 topFromSys='sys/'
+reconnectTopic='reconnect'
+
+prefAT='AT+'
+cmdIdSketch='idSketch'
+endOfLine='\n'
+msg2py='2py'
+
+logfile=sys.stdout
+
+startedSerial2MQTT = {}
+lastListDev = []
 
 
 # use to sort log messages
@@ -46,7 +39,8 @@ def logp (msg, gravity='trace'):
 # log file must not grow big
 # I need to overwrite it often
 def reOpenLogfile(logfileName):
-	global logStartTime, logfile
+	"re open logfile, I do it because it must not grow big"
+	global logStartTime, logfile, startedSerial2MQTT
 	#
 	if logfileName != '' :
 		try:
@@ -58,6 +52,7 @@ def reOpenLogfile(logfileName):
 				logfile = open(logfileName, "w", 1)
 			logStartTime = time.time()
 			logp('logStartTime:' + time.asctime(time.localtime(time.time())), 'info')
+			logp('list of started devices:' + str(startedSerial2MQTT), 'info')
 		except IOError:
 			print('[error] could not open logfile:' + logfileName)
 			sys.exit(3)
@@ -65,37 +60,31 @@ def reOpenLogfile(logfileName):
 		print('I cant re open logfile. name is empty')
 
 
+
 def read_args(argv):
 	# optional args have default values above
-	global logfile, hostMQTT, namePy, myTopic1, myTopic2, devSerial
+	global logfile, repTmp
 	logfileName = ''
 	try:
-		opts, args = getopt.getopt(argv,"hl:b:n:t:u:d:",["logfile=","broker=","namepy=","mytopic1=","mytopic2=","devserial="])
+		opts, args = getopt.getopt(argv,"hr:l:",["reptmp=","logfile="])
 	except getopt.GetoptError:
-		print ('serial2MQTTduplex.py -l <logfile> -n <namepy> -t <mytopic1> -u <mytopic2> -d <devserial>')
+		print ('watchConnectPython2Arduino.py -r <reptmp> -l <logfile>')
 		sys.exit(2)
 	for opt, arg in opts:
 		if opt == '-h':
-			print ('serial2MQTTduplex.py -l <logfile> -n <namepy> -t <mytopic1> -u <mytopic2> -d <devserial>')
+			print ('watchConnectPython2Arduino.py -r <reptmp> -l <logfile>')
 			sys.exit()
 		elif opt in ("-l", "--logfile"):
-			logfileName = arg
-		elif opt in ("-b", "--broker"):
-			hostMQTT = arg
-		elif opt in ("-n", "--namepy"):
-			namepy = arg
-		elif opt in ("-t", "--mytopic1"):
-			myTopic1 = arg
-		elif opt in ("-u", "--mytopic2"):
-			myTopic2 = arg
-		elif opt in ("-d", "--devserial"):
-			devSerial = arg
+			if (arg.count('stdout') > 0) :
+				logfileName = ''
+				logfile = sys.stdout
+				print ('logfile = ' + str(logfile))
+			else:
+				logfileName = arg
+		elif opt in ("-r", "--reptmp"):
+			repTmp = arg
+	logp('repTmp is '+ repTmp, 'debug')
 	logp('logfile is '+ logfileName, 'debug')
-	logp('broker is '+ hostMQTT, 'debug')
-	logp('namepy is '+ namePy, 'debug')
-	logp('mytopic1 is '+ myTopic1, 'debug')
-	logp('mytopic2 is '+ myTopic2, 'debug')
-	logp('devserial is '+ devSerial, 'debug')
 	# I try to open logfile
 	if logfileName != '' :
 		reOpenLogfile(logfileName)
@@ -109,55 +98,167 @@ if __name__ == "__main__":
 # if logfile is old, we remove it and overwrite it
 #   because it must not grow big !
 def checkLogfileSize(logfile):
+	"if logfile is old, we remove it and overwrite it because it must not grow big !"
 	global logStartTime
-	if (time.time() - logStartTime) > 30:
+	if (time.time() - logStartTime) > 600:
 		#print('reOpenLogfile of name:' + logfile.name)
 		reOpenLogfile(logfile.name)
 
 
+def readListSketchFromFile(fileName):
+	"read filename and append valid dict lines in returned dict"
+	logp('reading list of arguments for sketch in file : ' + fileName)
+	try:
+		fileListSketch = open(fileName, 'r')
+	except:
+		logp('could not open list of sketch configuration file: ' + fileName, 'error')
+		return {}
+	#
+	strLines = fileListSketch.readlines()
+	fileListSketch.close()
+	dSketch = {}
+	for strl in strLines:
+		try:
+			if (strl[0] != '#'):
+				itemDict = ast.literal_eval(strl)
+				if (type(itemDict) == type({})):
+					dSketch.update(itemDict)
+				else:
+					logp ('line NOT dict:' + strl)
+		except:
+		  logp('line fails as dict:' + strl)
+	fileListSketch.close()
+	return dSketch
+
+def launchSerial2MQTT(da, arepTmp,adevSerial):
+	"Launches the python script serial2MQTTduplex.py thanks to the dictionnary of arg"
+	# test that it has all required arg
+	for keyNeeded in ("logfile","broker","namepy","mytopic1","mytopic2"):
+		if not (da.has_key(keyNeeded)):
+			logp('I refuse to launch serial2MQTTduplex ...', 'error')
+			logp(' because I cannot find key ' + keyNeeded, 'error')
+			return
+	cmd = './serial2MQTTduplex.py'+ ' -t '+da['mytopic1'] + ' -n '+da['namepy'] + ' -l '+arepTmp+'/' + da['logfile'] + ' -b '+da['broker'] + ' -d ' + adevSerial +' &'
+	os.system(cmd)
+
+
+def askIdSketchSerial(adevSerial):
+	"try to know the id of the arduino sketch linked on serial adevSerial"
+	# I get rid of AMA0
+	if (adevSerial.count('AMA') > 0):
+		return ' '
+	#
+	logp('trying to recognize arduino sketch on serial:' + adevSerial , 'info')
+	rIdSketch = ''
+	try:
+		ser = serial.Serial(adevSerial, baudrate=9600, timeout=0.2, writeTimeout=0.2)
+		logp (str(ser), 'info')
+		time.sleep(0.2)
+		#
+		#I empty arduino serial buffer
+		response = ser.read(100)
+		logp ("arduino buffer garbage: " + str(response), 'info')
+		#
+		# when we open serial to an arduino, this reset the board; it needs ~3s
+		time.sleep(3)
+	except:
+			logp ('could not ask idSketch to serial '+adevSerial , 'warning')
+			return ' '
+	#
+	try:
+		# I send a sys cmd to ask for id
+		cmd = (prefAT + cmdIdSketch + endOfLine)
+		ser.write(cmd)
+		logp (cmd)
+	except:
+		logp('may be not a serial com: '+adevSerial, 'info')
+		ser.close()
+		return ' '
+	# I give time to respond
+	time.sleep(0.2)
+	# I sort the response, I will get rid of unused messages
+	while ser.inWaiting():
+		# because of readline function, dont forget to open with timeout
+		response = ser.readline().replace('\n', '')
+		#logp ("answer is:" + response, 'debug')
+		tags = response.split(';')
+		if tags[0] == msg2py:
+			# msg2py: message 2 python only
+			# python use this to check connection with arduino
+			logp ('msg2py '+response, 'info')
+			nameInd = response.rfind(':')	
+			if (nameInd >= 0):
+				rIdSketch = response[nameInd+1:]
+				ser.close()
+				return rIdSketch
+		else :
+			# I dont analyse, but I print
+			logp (response, 'unknown from '+adevSerial)
+	# not found, I must not return empty value !
+	return ' '
+
+def giveUpdateListSerialDev(oldListDev, genericLsNameDev):
+	"list all serial dev connected; updates oldListDev, return list of new dev and dead dev"
+	newListDev = glob.glob(genericLsNameDev)
+	newListDev.sort()
+	lDevNew = []; lDevDead = []
+	if (cmp(oldListDev,newListDev) != 0):
+		# I look for new connected device
+		for dev in newListDev:
+			if oldListDev.count(dev) == 0:
+				lDevNew.append(dev)
+		# I look for dead (not) connected device
+		for dev in oldListDev:
+			if newListDev.count(dev) == 0:
+				lDevDead.append(dev)
+		logp('I have discovered changes in serial devices:  new: '+ str(lDevNew)+ ' and dead: '+str(lDevDead), 'info')
+	return [newListDev, lDevNew, lDevDead ]
+
+
+# mosquitto part
+# --------------
+
+def treatSysMsg(msgCmd, msgVal):
+	"treat systeme msg coming from mosquitto"
+	if (msgCmd.count(reconnectTopic) > 0):
+		# the name of /dev/tty to reconnect is in msgVal
+		if (len(msgVal) == 0):
+			logp('name of device to reconnect is empty', 'warn')
+			return
+		# I take off dev from list
+		if (lastListDev.count(msgVal) > 0):
+			lastListDev.remove(msgVal)
+	# after removal from lastListDev, the script will see it exists and 
+	#   it will try to reconnect it
+
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, rc):
-	logp("Connected with result code "+str(rc), 'info')
+	print("Connected to mosquitto with result code "+str(rc))
 	# Subscribing in on_connect() means that if we lose the connection and
 	# reconnect then subscriptions will be renewed.
-	mqttc.subscribe(myTopicSys +'#')
-	mqttc.message_callback_add(myTopicSys+ '#', on_message_myTopicSys)
+	mqttc.subscribe(myTopicWatch+ topFromSys +'#')
+	mqttc.message_callback_add(myTopicWatch+ topFromSys+ '#', on_message_myTopicSys)
 
 # The callback for when a PUBLISH message is received from the server.
 # usually we dont go to  on_message
 #  because we go to a specific callback that we have defined for each topic
 def on_message(client, userdata, msg):
-	logp('msg:' +msg.topic+" : "+str(msg.payload), 'garbage')
+	"default callback for message. no action provided"
+	logp('not used msg:' +msg.topic+" : "+str(msg.payload), 'info')
 
 # The callback for when a PUBLISH message is received from the server.
 # usually  we go to a specific callback that we have defined for each topic
 def on_message_myTopicSys(client, userdata, msg):
 	logp("spec callbackSys,"+msg.topic+":"+str(msg.payload), 'info')
-
-# read all available messages from arduino
-def readArduinoAvailableMsg(seri):
-	while seri.inWaiting():
-		# because of readline function, dont forget to open with timeout
-		response = seri.readline().replace('\n', '')
-		#logp ("answer is:" + response, 'debug')
-		tags = response.split(';')
-		if tags[0] == msg2mqtt:
-			# msg2mqtt: message to send to mqtt
-			# I dont analyse those messages, I transmit to mqtt
-			(topic, value) = tags[1].split(':')
-			pyTopic = myTopic1 + topFromPy + topic
-			# trace
-			logp('{} = {}'.format(pyTopic, value), 'garbage')
-		elif tags[0] == msg2py:
-			# msg2py: message 2 python only
-			# python use this to check connection with arduino
-			logp ('msg2py '+response, 'info')
-		else :
-			# I dont analyse, but I print
-			logp (response, 'unknown from '+devSerial)
+	cmdMsg = msg.topic.replace(myTopicWatch, '').replace(topFromSys, '').replace('#','')
+	treatSysMsg(cmdMsg, msg.payload)
 
 
+#  main part of script
+#  -------------------
 
+
+# connection to mosquitto
 mqttc = mqtt.Client("", True, None, mqtt.MQTTv31)
 mqttc.on_message = on_message
 mqttc.on_connect = on_connect
@@ -165,29 +266,42 @@ mqttc.on_connect = on_connect
 cr = mqttc.connect(hostMQTT, port=1883, keepalive=60, bind_address="")
 mqttc.loop_start()
 
-# connection to arduino
-# I use 9600, because I had many pb with pyserial at 38400 !!!
-#ser = serial.Serial(devSerial, baudrate=9600, timeout=0.2)
-logp (str(ser), 'info')
-# when we open serial to an arduino, this reset the board; it needs ~3s
-time.sleep(0.2)
-#I empty arduino serial buffer
-response = ser.readline()
-logp ("arduino buffer garbage: " + str(response), 'info')
-time.sleep(2)
 
-# loop to get connection to arduino
-
-
-# infinite loop
-# I regulary check new serial devices /dev/ttyU* /dev/ttyA*
-# when I find one, I try to link arduino to MQTT
 while True:
-	time.sleep(sleepBetweenLoop)
-	#  TO DO
-	readArduinoAvailableMsg(ser)
-	#check size
+	# check if the list of serial has changed
+	listDevNew=[]; listDevDead=[]
+	[lastListDev, listDevNew, listDevDead] = giveUpdateListSerialDev(lastListDev, devSearchString)
+	#
+	# we remove dead dev from list of active dev
+	for dev in listDevDead:
+		if ( startedSerial2MQTT.has_key(dev) ):
+			del startedSerial2MQTT[dev]
+	#
+	# if we detect new connected device, we try to connect python com script
+	if (len (listDevNew) > 0):
+		# we update list of scripts
+		dSketch = readListSketchFromFile(fileNameListSketch)
+		if (len(dSketch) == 0):
+			logp('empty list of sketch configuration in file: ' + fileNameListSketch , 'error')
+			exit(-1)
+		# we try to connect python com script to new devices
+		for ndl in listDevNew:
+			logp('trying to recognize and connect new serial device: '+ ndl, 'info')
+			idSketch = askIdSketchSerial(ndl)
+			if dSketch.has_key(idSketch):
+				launchSerial2MQTT(dSketch[idSketch], repTmp, ndl )
+				# I am trusty, I immediately add it to active device list
+				startedSerial2MQTT.update({ndl:idSketch})
+			else:
+				logp('I dont have this arduino id sketch in my listing file:' + idSketch, 'error')
+	#
+	# if there was an update, I log the new list of started dev
+	if (len (listDevNew) > 0  or len (listDevDead) > 0):
+		logp('list of started device:' + str(startedSerial2MQTT), 'info')
+	#
+	#check size, logfile should not get too big
 	checkLogfileSize(logfile)
-
+	#
+	time.sleep(sleepBetweenLoop)
 
 
