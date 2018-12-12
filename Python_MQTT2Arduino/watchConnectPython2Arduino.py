@@ -9,9 +9,9 @@ import sys, getopt
 import ast
 import os, glob
 
-
-fileNameListSketch = 'listSketch.txt'
-repTmp='/media/ramdisk/openhab/logPython'
+repSketch='/etc/openhab2/Python_MQTT2Arduino'
+fileNameListSketch = repSketch + '/listSketch.txt'
+repTmp = repSketch
 
 hostMQTT='localhost'
 devSearchString='/dev/tty[UA]*'
@@ -40,7 +40,7 @@ def logp (msg, gravity='trace'):
 # I need to overwrite it often
 def reOpenLogfile(logfileName):
 	"re open logfile, I do it because it must not grow big"
-	global logStartTime, logfile, startedSerial2MQTT
+	global logfile, startedSerial2MQTT
 	#
 	if logfileName != '' :
 		try:
@@ -50,7 +50,6 @@ def reOpenLogfile(logfileName):
 			# file will be overwritten
 			if (logfileName != '<stdout>') :
 				logfile = open(logfileName, "w", 1)
-			logStartTime = time.time()
 			logp('logStartTime:' + time.asctime(time.localtime(time.time())), 'info')
 			logp('list of started devices:' + str(startedSerial2MQTT), 'info')
 		except IOError:
@@ -90,7 +89,6 @@ def read_args(argv):
 		reOpenLogfile(logfileName)
 
 
-logStartTime = time.time()
 if __name__ == "__main__":
 	read_args(sys.argv[1:])
 
@@ -98,11 +96,9 @@ if __name__ == "__main__":
 # if logfile is old, we remove it and overwrite it
 #   because it must not grow big !
 def checkLogfileSize(logfile):
-	"if logfile is old, we remove it and overwrite it because it must not grow big !"
-	global logStartTime
-	if (time.time() - logStartTime) > 600:
-		#print('reOpenLogfile of name:' + logfile.name)
-		reOpenLogfile(logfile.name)
+    "if logfile is too big, we remove it and overwrite it because it must not grow big !"
+    if (logfile.name != '<stdout>') and (os.path.getsize(logfile.name) > 900900):
+        reOpenLogfile(logfile.name)
 
 
 def readListSketchFromFile(fileName):
@@ -138,7 +134,7 @@ def launchSerial2MQTT(da, arepTmp,adevSerial):
 			logp('I refuse to launch serial2MQTTduplex ...', 'error')
 			logp(' because I cannot find key ' + keyNeeded, 'error')
 			return
-	cmd = './serial2MQTTduplex.py'+ ' -t '+da['mytopic1'] + ' -n '+da['namepy'] + ' -l '+arepTmp+'/' + da['logfile'] + ' -b '+da['broker'] + ' -d ' + adevSerial +' &'
+	cmd = repSketch+ '/serial2MQTTduplex.py'+ ' -t '+da['mytopic1'] + ' -n '+da['namepy'] + ' -l '+arepTmp+'/' + da['logfile'] + ' -b '+da['broker'] + ' -d ' + adevSerial +' &'
 	os.system(cmd)
 
 
