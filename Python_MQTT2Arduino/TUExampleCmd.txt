@@ -1,0 +1,36 @@
+# liste de commandes qui peuvent etre envoyees aux arduino nano
+# et quelques reponses
+# cela permet de verifier le format des messages
+
+DO+lit1/switch:ON
+DO+lit2/switch:OFF
+DO+radiateur/switch:ON
+
+AT+idSketch
+AT+idBuild
+AT+listCmdAT:
+AT+listCmdDO:
+AT+listPin:
+AT+pinMode:13,1   // bug
+AT+pinRead:15,2
+AT+pinWrite:13,1,1   // switch ON builtin led
+
+
+DO+lit1/switch:ON
+MessageReceived, I am parsing...
+Message is a DO cmd, I am parsing...
+2mq;lit1/switch/OK:ON
+
+DO+radiateur/switch:OFF
+2mq;radiateur/switch/OK:OFF
+2mq;radiateur/etat:OFF
+
+
+AT+idSketch
+MessageReceived, I am parsing...
+Message is a AT cmd, I am parsing...
+2py;sketchId:arduinoChEnfant.ino
+
+AT+pinRead:15,2
+2py;pinRead:528
+
